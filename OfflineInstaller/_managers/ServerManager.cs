@@ -55,6 +55,10 @@ namespace OfflineInstaller._managers
             }
         }
 
+        /// <summary>
+        /// Handles incoming HTTP requests and routes them to different actions based on the requested URL.
+        /// </summary>
+        /// <param name="context">The HttpListenerContext object representing the current request.</param>
         private static void HandleRequest(HttpListenerContext context)
         {
             string requestUrl = context.Request.Url.AbsolutePath.ToLower(); // Get the requested URL path in lowercase
@@ -102,6 +106,12 @@ namespace OfflineInstaller._managers
             }
         }
 
+        ///<summary>
+        /// Sends an HTTP response with the specified response string and status code.
+        ///</summary>
+        ///<param name="context">The HttpListenerContext representing the response.</param>
+        ///<param name="responseString">The string to be sent as the response.</param>
+        ///<param name="statusCode">The HTTP status code to be included in the response. Defaults to HttpStatusCode.OK if not specified.</param>
         private static void SendResponse(HttpListenerContext context, string responseString, HttpStatusCode statusCode = HttpStatusCode.OK)
         {
             byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
@@ -111,6 +121,11 @@ namespace OfflineInstaller._managers
             context.Response.OutputStream.Close();
         }
 
+        ///<summary>
+        /// Serves a program file as a downloadable attachment in the HTTP response.
+        ///</summary>
+        ///<param name="context">The HttpListenerContext representing the response.</param>
+        ///<param name="programName">The name of the program file to be served.</param>
         private static void ServeProgram(HttpListenerContext context, string programName)
         {
             string file = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "_programs", $"{programName}.zip");
@@ -133,6 +148,11 @@ namespace OfflineInstaller._managers
             context.Response.Close();
         }
 
+        ///<summary>
+        /// Serves a static file as a response, identified by the relative path.
+        ///</summary>
+        ///<param name="context">The HttpListenerContext representing the response.</param>
+        ///<param name="relativePath">The relative path of the static file to be served.</param>
         private static void ServeStaticFile(HttpListenerContext context, string relativePath)
         {
             string file = string.Concat(MainWindow.installerLocation, @"\" , relativePath, context.Request.Url.LocalPath.AsSpan("/static/electron-launcher".Length));
@@ -160,6 +180,11 @@ namespace OfflineInstaller._managers
             }
         }
 
+        ///<summary>
+        /// Retrieves the MIME type (content type) based on the file extension of the given file.
+        ///</summary>
+        ///<param name="fileName">The name of the file to retrieve the MIME type for.</param>
+        ///<returns>The MIME type (content type) as a string.</returns>
         private static string GetMimeType(string fileName)
         {
             string extension = Path.GetExtension(fileName);
@@ -186,6 +211,9 @@ namespace OfflineInstaller._managers
             }
         }
 
+        ///<summary>
+        /// Stops the HTTP server if it is currently running.
+        ///</summary>
         public static void StopServer()
         {
             if (listener != null && listener.IsListening)
