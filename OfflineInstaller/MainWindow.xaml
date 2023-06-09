@@ -74,70 +74,163 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="RadioButtonStyle" TargetType="RadioButton">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <Ellipse x:Name="RadioEllipse"
+                                     Width="16"
+                                     Height="16"
+                                     Fill="White"
+                                     Stroke="Black"
+                                     StrokeThickness="2"
+                                     HorizontalAlignment="Left"
+                                     Margin="2"/>
+                            <Ellipse x:Name="RadioInnerEllipse"
+                                     Width="8"
+                                     Height="8"
+                                     Fill="Black"
+                                     Visibility="Collapsed"
+                                     HorizontalAlignment="Center"
+                                     VerticalAlignment="Center"/>
+                            <ContentPresenter x:Name="ContentPresenter"
+                                              VerticalAlignment="Center"
+                                              Margin="20,0,0,0"
+                                              Content="{TemplateBinding Content}"
+                                              RecognizesAccessKey="True"/>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="RadioInnerEllipse" Property="Visibility" Value="Visible"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="RadioEllipse" Property="Stroke" Value="DarkGray"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="RadioEllipse" Property="Stroke" Value="Gray"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="RadioEllipse" Property="Fill" Value="LightGray"/>
+                                <Setter TargetName="RadioEllipse" Property="Stroke" Value="Gray"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
     
     <Grid>
         <Grid.RowDefinitions>
-            <RowDefinition Height="120"/>
-            <RowDefinition Height="50"/>
-            <RowDefinition Height="50"/>
-            <RowDefinition Height="50"/>
+            <RowDefinition Height="130"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="40"/>
             <RowDefinition/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition/>
-            <ColumnDefinition/>
+            <ColumnDefinition Width="455"/>
         </Grid.ColumnDefinitions>
 
         <StackPanel Grid.Row="0" Grid.Column="0">
-            <StackPanel Orientation="Horizontal">
-                <Label Content="Software Mode" FontWeight="Bold"/>
+            <Border BorderBrush="Black" BorderThickness="0,1,0,1">
+                <StackPanel Background="#424242" Height="35" Orientation="Horizontal">
+                    <Label 
+                            Content="Software Mode" 
+                            FontWeight="Bold" 
+                            FontSize="18" 
+                            Foreground="White"
+                            HorizontalContentAlignment="Center" 
+                            VerticalContentAlignment="Center" 
+                            Margin="0, 0, 110, 0"/>
+                </StackPanel>
+            </Border>
+
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" Margin="20, 15, 0, 15">
+                <RadioButton Name="productionMode" Style="{StaticResource RadioButtonStyle}" GroupName="DownloadMode" IsChecked="True" />
+                <Label 
+                        Content="Production" 
+                        FontWeight="Bold" 
+                        FontSize="12" 
+                        Foreground="Black"
+                        HorizontalContentAlignment="Center" 
+                        VerticalContentAlignment="Center" 
+                        Margin="0, 0, 40, 0"/>
+                
+                <RadioButton Name="developmentMode" Style="{StaticResource RadioButtonStyle}" GroupName="DownloadMode" />
+                <Label 
+                        Content="Development" 
+                        FontWeight="Bold" 
+                        FontSize="12" 
+                        Foreground="Black"
+                        HorizontalContentAlignment="Center" 
+                        VerticalContentAlignment="Center"/>
             </StackPanel>
 
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0, 15, 0, 30">
-                <RadioButton Name="productionMode" Margin="0, 0, 40, 0" Content="Production" GroupName="DownloadMode" IsChecked="True" />
-                <RadioButton Name="developmentMode" Content="Development" GroupName="DownloadMode" />
-            </StackPanel>
+            <Border BorderBrush="Black" BorderThickness="0,1,0,1">
+                <WrapPanel Background="#424242"  Height="35">
+                    <Label 
+                        Content="Software Type" 
+                        FontWeight="Bold" 
+                        FontSize="18" 
+                        Foreground="White"
+                        HorizontalContentAlignment="Center" 
+                        VerticalContentAlignment="Center" 
+                        Margin="0, 0, 55, 0"/>
 
-            <Border BorderBrush="Black" BorderThickness="0,1,0,0">
-                <WrapPanel>
-                    <Label Content="Software Type" FontWeight="Bold" Margin="0, 0, 150, 0"/>
-                    <Label Name="NetworkWarning" Content="No network connection" Foreground="Red" FontWeight="Bold"/>
+                    <Label Name="NetworkWarning" FontSize="13" VerticalAlignment="Center" Content="No internet connection" Foreground="Red" FontWeight="Bold"/>
                 </WrapPanel>
             </Border>
         </StackPanel>
 
-        <Border Grid.Row="1" Grid.Column="0" BorderBrush="Black" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Label VerticalAlignment="Center" Margin="20,0" Width="180" Content="Launcher"/>
+        <StackPanel Grid.Row="1" Grid.RowSpan="3" Grid.Column="0" Margin="0,20,0,0" Orientation="Vertical" VerticalAlignment="Center">
+            <WrapPanel>
+                <Label VerticalAlignment="Center"  FontWeight="Bold" Margin="20,0" Width="100" Content="Launcher"/>
                 <Label VerticalAlignment="Center" Content="Local Version: "/>
-                <TextBlock Name="LauncherVersion" VerticalAlignment="Center" Text="Local Version"/>
-            </StackPanel>
-        </Border>
+                <TextBlock Name="LauncherVersion" VerticalAlignment="Center" Text="Unknown"/>
+            </WrapPanel>
 
-        <Border Grid.Row="2" Grid.Column="0" BorderBrush="Black" BorderThickness="0,1,0,0">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Label VerticalAlignment="Center" Margin="20,0" Width="180" Content="NUC"/>
+            <WrapPanel Margin="0, 10">
+                <Label VerticalAlignment="Center"  FontWeight="Bold" Margin="20,0" Width="100" Content="NUC"/>
                 <Label VerticalAlignment="Center" Content="Local Version: "/>
-                <TextBlock Name="NucVersion" VerticalAlignment="Center" Text="Local Version"/>
-            </StackPanel>
-        </Border>
+                <TextBlock Name="NucVersion" VerticalAlignment="Center" Text="Unknown"/>
+            </WrapPanel>
 
-        <Border Grid.Row="3" Grid.Column="0" BorderBrush="Black" BorderThickness="0,1,0,1">
-            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                <Label VerticalAlignment="Center" Margin="20,0" Width="180" Content="Station"/>
+            <WrapPanel>
+                <Label VerticalAlignment="Center"  FontWeight="Bold" Margin="20,0" Width="100" Content="Station"/>
                 <Label VerticalAlignment="Center" Content="Local Version: "/>
-                <TextBlock Name="StationVersion" VerticalAlignment="Center" Text="Local Version"/>
-            </StackPanel>
-        </Border>
+                <TextBlock Name="StationVersion" VerticalAlignment="Center" Text="Unknown"/>
+            </WrapPanel>
+        </StackPanel>
 
-        <StackPanel Grid.Column="0" Grid.Row="4" VerticalAlignment="Center" HorizontalAlignment="Center" Orientation="Horizontal">
+        <Button 
+            Grid.Row="3"
+            Grid.Column="0"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Name="Refresh"
+            Style="{StaticResource MainButton}"  
+            Margin="0, 0, 10, -10"
+            ToolTip="Recheck the local versions."
+            Click="Button_Click">
+            <Image Source="./assets/refresh.ico" Width="25">
+                <Image.RenderTransform>
+                    <RotateTransform x:Name="RotationRefresh" CenterX="12.5" CenterY="12.5" />
+                </Image.RenderTransform>
+            </Image>
+        </Button>
+
+        <StackPanel Grid.Column="0" Grid.Row="4" Background="#424242" Margin="0, 20, 0, 0" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" Orientation="Horizontal">
             <Button
                 VerticalAlignment="Center"
                 Style="{StaticResource MainButton}"
                 Name="Start"
                 Content="Start"
-                Width="90" 
+                Margin="10, 0, 0, 0"
+                Width="70" 
                 Height="25" 
                 Click="Button_Click"
                 ToolTip="Manually start the hosting server."/>
@@ -148,7 +241,7 @@
                 Name="Stop"
                 Content="Stop"
                 Margin="10, 0, 0, 0"
-                Width="90" 
+                Width="70" 
                 Height="25" 
                 Click="Button_Click"
                 ToolTip="Manually stop the hosting server."/>
@@ -158,8 +251,8 @@
                 Style="{StaticResource MainButton}"
                 Name="Update"
                 Content="Update"
-                Margin="110, 0, 0, 0"
-                Width="90" 
+                Margin="90, 0, 0, 0"
+                Width="70" 
                 Height="25" 
                 Click="Button_Click"
                 ToolTip="Download and update the local LeadMe files."/>
@@ -195,5 +288,22 @@
                 </bh:Interaction.Triggers>
             </TextBox>
         </ScrollViewer>
+
+        <Button 
+            Grid.Row="5"
+            Grid.Column="1"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Bottom"
+            Name="Clear"
+            Style="{StaticResource MainButton}"  
+            Margin="0, 0, 30, 10"
+            ToolTip="Clear the console."
+            Click="Button_Click">
+            <Image Source="./assets/refresh.ico" Width="25">
+                <Image.RenderTransform>
+                    <RotateTransform x:Name="RotationClear" CenterX="12.5" CenterY="12.5" />
+                </Image.RenderTransform>
+            </Image>
+        </Button>
     </Grid>
 </Window>

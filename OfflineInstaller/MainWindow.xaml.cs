@@ -7,6 +7,8 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Threading.Tasks;
 using System.Collections.Generic;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace OfflineInstaller
 {
@@ -38,8 +40,8 @@ namespace OfflineInstaller
             textBlockMap = new Dictionary<string, TextBlock>
             {
                 { "Launcher", LauncherVersion },
-                { "nuc", NucVersion },
-                { "station", StationVersion }
+                { "NUC", NucVersion },
+                { "Station", StationVersion }
             };
             CheckProgramVersions();
         }
@@ -82,13 +84,26 @@ namespace OfflineInstaller
             }
         }
 
-        /// <summary>
-        /// Checks the version numbers of the currently stored software.
-        /// </summary>
-        public void CheckProgramVersions()
+        ///<summary>
+        /// Checks the program versions and updates the UI with the version numbers.
+        /// If the 'delay' parameter is set to true, it adds a delay before retrieving the versions.
+        ///</summary>
+        ///<param name="delay">Flag indicating whether to introduce a delay before retrieving the versions.</param>
+        public void CheckProgramVersions(bool delay = false)
         {
             Task.Run(() =>
             {
+                if (delay)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        LauncherVersion.Text = "Loading";
+                        NucVersion.Text = "Loading";
+                        StationVersion.Text = "Loading";
+                    });
+                    Task.Delay(1500).Wait();
+                }
+
                 string launcherVersion = FileManager.ExtractVersionFromYaml();
                 string nucVersion = FileManager.CheckProgramVersion("nuc");
                 string stationVersion = FileManager.CheckProgramVersion("station");
@@ -123,6 +138,10 @@ namespace OfflineInstaller
 
             switch (clickedButton.Name)
             {
+                case "Refresh":
+                    RotationRefresh.BeginAnimation(RotateTransform.AngleProperty, _animation);
+                    CheckProgramVersions(true);
+                    break;
                 case "Start":
                     ServerManager.StartServer();
                     break;
@@ -132,10 +151,25 @@ namespace OfflineInstaller
                 case "Update":
                     DownloadManager.UpdateAllPrograms(productionMode.IsChecked == true);
                     break;
+                case "Clear":
+                    RotationClear.BeginAnimation(RotateTransform.AngleProperty, _animation);
+                    MockConsole.ClearConsole();
+                    break;
                 default:
-                    MockConsole.WriteLine("Unknown action.");
+                    MockConsole.WriteLine($"Unknown action: {clickedButton.Name}.");
                     break;
             }
         }
+
+        /// <summary>
+        /// The standard rotation animation for the refresh action.
+        /// </summary>
+        private readonly DoubleAnimation _animation = new()
+        {
+            From = 0,
+            To = 360,
+            Duration = TimeSpan.FromSeconds(2),
+            RepeatBehavior = new RepeatBehavior(1)
+        };
     }
 }
