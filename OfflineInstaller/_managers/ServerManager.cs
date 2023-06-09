@@ -2,6 +2,7 @@
 using System;
 using System.IO;
 using System.Net;
+using System.Windows.Controls;
 
 namespace OfflineInstaller._managers
 {
@@ -76,9 +77,19 @@ namespace OfflineInstaller._managers
                     ServeProgram(context, "NUC");
                     break;
 
+                case "/program-nuc-version":
+                    MockConsole.WriteLine("NUC version being checked.");
+                    ServeProgramVersion(context, "NUC");
+                    break;
+
                 case "/program-station":
                     MockConsole.WriteLine("Station file being served.");
                     ServeProgram(context, "Station");
+                    break;
+
+                case "/program-station-version":
+                    MockConsole.WriteLine("Station version being checked.");
+                    ServeProgramVersion(context, "Station");
                     break;
 
                 case "/program-setvol":
@@ -104,6 +115,32 @@ namespace OfflineInstaller._managers
                     }
                     break;
             }
+        }
+
+        /// <summary>
+        /// Serves the program version information to an HTTP listener context.
+        /// </summary>
+        /// <param name="context">The HTTP listener context.</param>
+        /// <param name="programName">The name of the program.</param>
+        private static void ServeProgramVersion(HttpListenerContext context, string programName)
+        {
+            TextBlock? versionBlock = MainWindow.Instance.GetTextBlock("Station");
+            if (versionBlock == null || string.IsNullOrWhiteSpace(versionBlock.Text))
+            {
+                SendResponse(context, "404 Not Found", HttpStatusCode.NotFound);
+                return;
+            }
+
+            string version = versionBlock.Text.Trim();
+            if (version.Equals("Not found", StringComparison.OrdinalIgnoreCase) ||
+                version.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                SendResponse(context, "404 Not Found", HttpStatusCode.NotFound);
+                return;
+            }
+
+            string response = $"{version} {programName}";
+            SendResponse(context, response, HttpStatusCode.Accepted);
         }
 
         ///<summary>
