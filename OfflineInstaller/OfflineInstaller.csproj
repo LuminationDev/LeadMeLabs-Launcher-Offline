@@ -5,13 +5,22 @@
     <TargetFramework>net6.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
+	<ApplicationIcon>./assets/icon.ico</ApplicationIcon>
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="assets\icon.ico" />
+    <None Remove="assets\refresh.ico" />
     <None Remove="_programs\.gitkeep" />
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="assets\icon.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="assets\refresh.ico">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <Content Include="_programs\.gitkeep">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
