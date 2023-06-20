@@ -2,7 +2,7 @@
 using System;
 using System.IO;
 using System.Net;
-using System.Windows.Controls;
+using System.Threading.Tasks;
 
 namespace OfflineInstaller._managers
 {
@@ -18,7 +18,7 @@ namespace OfflineInstaller._managers
             MockConsole.WriteLine("Starting server.");
 
             listener = new HttpListener();
-            listener.Prefixes.Add("http://localhost:8088/"); // Specify the desired localhost URL and port
+            listener.Prefixes.Add("http://+:8088/");
 
             try
             {
@@ -46,8 +46,9 @@ namespace OfflineInstaller._managers
             {
                 try
                 {
+                    MockConsole.WriteLine("Waiting for new connection.");
                     HttpListenerContext context = listener.GetContext();
-                    HandleRequest(context);
+                    Task.Run(() => HandleRequest(context));
                 }
                 catch (Exception ex)
                 {
@@ -79,7 +80,7 @@ namespace OfflineInstaller._managers
 
                 case "/program-nuc-version":
                     MockConsole.WriteLine("NUC version being checked.");
-                    ServeProgramVersion(context, "NUC");
+                    ServeProgramVersion(context, "nuc");
                     break;
 
                 case "/program-station":
@@ -89,7 +90,7 @@ namespace OfflineInstaller._managers
 
                 case "/program-station-version":
                     MockConsole.WriteLine("Station version being checked.");
-                    ServeProgramVersion(context, "Station");
+                    ServeProgramVersion(context, "station");
                     break;
 
                 case "/program-setvol":
@@ -124,14 +125,13 @@ namespace OfflineInstaller._managers
         /// <param name="programName">The name of the program.</param>
         private static void ServeProgramVersion(HttpListenerContext context, string programName)
         {
-            TextBlock? versionBlock = MainWindow.Instance.GetTextBlock("Station");
-            if (versionBlock == null || string.IsNullOrWhiteSpace(versionBlock.Text))
+            string? version = MainWindow.Instance.versionMap[programName];
+            if (version == null || string.IsNullOrWhiteSpace(version))
             {
                 SendResponse(context, "404 Not Found", HttpStatusCode.NotFound);
                 return;
             }
 
-            string version = versionBlock.Text.Trim();
             if (version.Equals("Not found", StringComparison.OrdinalIgnoreCase) ||
                 version.Equals("Unknown", StringComparison.OrdinalIgnoreCase))
             {
@@ -140,7 +140,7 @@ namespace OfflineInstaller._managers
             }
 
             string response = $"{version} {programName}";
-            SendResponse(context, response, HttpStatusCode.Accepted);
+            SendResponse(context, response);
         }
 
         ///<summary>
@@ -156,6 +156,7 @@ namespace OfflineInstaller._managers
             context.Response.ContentLength64 = buffer.Length;
             context.Response.OutputStream.Write(buffer, 0, buffer.Length);
             context.Response.OutputStream.Close();
+            context.Response.Close();
         }
 
         ///<summary>
@@ -173,7 +174,8 @@ namespace OfflineInstaller._managers
 
             using (FileStream fileStream = new FileStream(file, FileMode.Open, FileAccess.Read))
             {
-                byte[] buffer = new byte[4096];
+                //byte[] buffer = new byte[16384];
+                byte[] buffer = new byte[32768];
                 int bytesRead;
 
                 while ((bytesRead = fileStream.Read(buffer, 0, buffer.Length)) > 0)
@@ -200,7 +202,8 @@ namespace OfflineInstaller._managers
 
                 using (FileStream fileStream = new FileStream(file, FileMode.Open, FileAccess.Read))
                 {
-                    byte[] buffer = new byte[4096];
+                    //byte[] buffer = new byte[4096];
+                    byte[] buffer = new byte[32768];
                     int bytesRead;
 
                     while ((bytesRead = fileStream.Read(buffer, 0, buffer.Length)) > 0)

@@ -22,7 +22,8 @@ namespace OfflineInstaller
 
         public static string? installerLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
-        private readonly Dictionary<string, TextBlock> textBlockMap;
+        private readonly Dictionary<string, TextBlock> textBlockMap = new();
+        public readonly Dictionary<string, string> versionMap = new();
 
         public MainWindow()
         {
@@ -35,7 +36,13 @@ namespace OfflineInstaller
             LocationChanged += MainWindow_LocationChanged;
             Instance = this;
 
-            CheckForNetworkConnection();
+            // Check if in admin mode first
+            if (!SystemManager.IsRunningAsAdmin())
+            {
+                MockConsole.WriteLine("This program requires admin privileges.");
+                MockConsole.WriteLine("Please run the program as an administrator.");
+                return;
+            }
 
             textBlockMap = new Dictionary<string, TextBlock>
             {
@@ -43,7 +50,11 @@ namespace OfflineInstaller
                 { "NUC", NucVersion },
                 { "Station", StationVersion }
             };
+
+            CheckForNetworkConnection();
             CheckProgramVersions();
+
+            App.SetWindowTitle($"Offline Installer - {SystemManager.GetVersionNumber()}");
         }
 
         /// <summary>
@@ -77,6 +88,12 @@ namespace OfflineInstaller
 
             MockConsole.WriteLine($"Internet connection available: {connection}");
 
+            if (!FirewallManager.IsPortAllowed())
+            {
+                MockConsole.WriteLine($"WARNING: Port 8088 for TCP connection is not permitted in Inbound Rules. " +
+                    $"Cannot serve programs over the network, only on the local computer");
+            }
+
             // Start up the internal server if there is not internet.
             if(!connection)
             {
@@ -107,6 +124,9 @@ namespace OfflineInstaller
                 string launcherVersion = FileManager.ExtractVersionFromYaml();
                 string nucVersion = FileManager.CheckProgramVersion("nuc");
                 string stationVersion = FileManager.CheckProgramVersion("station");
+
+                versionMap["nuc"] = nucVersion;
+                versionMap["station"] = stationVersion;
 
                 // Update the UI with the version numbers
                 Application.Current.Dispatcher.Invoke(() =>
@@ -171,5 +191,28 @@ namespace OfflineInstaller
             Duration = TimeSpan.FromSeconds(2),
             RepeatBehavior = new RepeatBehavior(1)
         };
+
+        private void MainWindow_Closing(object sender, System.ComponentModel.CancelEventArgs e)
+        {
+            // For example, show a confirmation dialog
+            MessageBoxResult result = MessageBox.Show("Are you sure you want to exit?", "Confirmation", MessageBoxButton.YesNo, MessageBoxImage.Question);
+
+            // If the user clicks "No," cancel the closing event
+            if (result == MessageBoxResult.No)
+            {
+                e.Cancel = true;
+            }
+            else
+            {
+                // Attempt to stop any open servers
+                ServerManager.StopServer();
+
+                // Wait for the server to be fully shutdown
+                Task.Delay(1000).Wait();
+
+                // Exit the application
+                Application.Current.Shutdown();
+            }
+        }
     }
 }
