@@ -79,10 +79,12 @@ namespace OfflineInstaller._managers
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
+                    //Update the text block and the version map
                     TextBlock textBlock = MainWindow.Instance.GetTextBlock(fileName);
                     if(textBlock != null)
                     {
                         textBlock.Text = version;
+                        MainWindow.Instance.versionMap[fileName] = version;
                     }
                 });
             });
