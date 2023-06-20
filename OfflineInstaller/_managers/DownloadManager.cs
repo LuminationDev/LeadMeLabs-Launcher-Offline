@@ -16,7 +16,7 @@ namespace OfflineInstaller._managers
 #if DEBUG
         private static readonly string LauncherURL = "http://localhost:8084"; //normally 8084
 #elif RELEASE
-        private static readonly string LauncherURL = "https://electronlauncher.herokuapp.com"; //production version - needs the Launcher.zip added
+        private static readonly string LauncherURL = "https://electronlauncher.herokuapp.com"; //production version
 #endif
 
         private static MainWindowViewModel? _viewModel;
@@ -55,10 +55,10 @@ namespace OfflineInstaller._managers
                 loadingWindow.Show();
 
                 // Perform necessary operations with the loadingWindow
-                //await DownloadSoftware("nuc");
-                //await DownloadSoftware("station");
-                //await DownloadSoftware("SetVol");
-                //await DownloadSoftware("steamcmd");
+                await DownloadSoftware("nuc");
+                await DownloadSoftware("station");
+                await DownloadSoftware("SetVol");
+                await DownloadSoftware("steamcmd");
                 await DownloadLauncher();
 
                 // Close the loadingWindow when you're done with it
