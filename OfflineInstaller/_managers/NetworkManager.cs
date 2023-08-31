@@ -28,7 +28,7 @@ namespace OfflineInstaller._managers
             try
             {
                 HttpResponseMessage response = client.GetAsync("https://herokuapp.com").Result;
-                return response.IsSuccessStatusCode;
+                return response.IsSuccessStatusCode || response.StatusCode.ToString() == "Forbidden";
             }
             catch
             {
