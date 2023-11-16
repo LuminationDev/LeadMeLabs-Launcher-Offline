@@ -1,23 +1,21 @@
 ﻿using Newtonsoft.Json.Linq;
 using OfflineInstaller._notification;
 using System;
+using System.Windows;
 using System.IO;
 using System.Net.Http;
 using System.Threading.Tasks;
+using System.Windows.Controls;
+using OfflineInstaller._pages;
 
 namespace OfflineInstaller._managers
 {
-    public class DownloadManager
+    public static class DownloadManager
     {
         // Track whether the software is from Development or Production
-        protected static string? Mode { get; private set; }
-        protected static string? BaseUrl { get; private set; }
-
-#if DEBUG
-        private static readonly string LauncherURL = "http://localhost:8084"; //normally 8084
-#elif RELEASE
-        private static readonly string LauncherURL = "https://electronlauncher.herokuapp.com"; //production version
-#endif
+        private static string? Mode { get; set; }
+        private static string? BaseUrl { get; set; }
+        private static string? LauncherUrl { get; set; }
 
         private static MainWindowViewModel? _viewModel;
 
@@ -35,9 +33,11 @@ namespace OfflineInstaller._managers
             Mode = isProduction ? "production" : "development";
 
 #if DEBUG
-            BaseUrl = "http://localhost:8082"; //For testing purposes only            
+            BaseUrl = "http://localhost:8082"; //For testing purposes only    
+            LauncherUrl = "http://localhost:8084"; //For testing purposes only 
 #elif RELEASE
             BaseUrl = Mode.Equals("development") ? "https://learninglablauncherdevelopment.herokuapp.com" : "https://learninglablauncher.herokuapp.com";
+            LauncherUrl = Mode.Equals("development") ? "https://leadme-launcher-development-92514d5e709f.herokuapp.com" : "https://electronlauncher.herokuapp.com";
 #endif
 
             MockConsole.WriteLine($"Downloading software from {Mode}.");
@@ -50,8 +50,12 @@ namespace OfflineInstaller._managers
 
             using (LoadingWindow loadingWindow = new(_viewModel))
             {
-                MainWindow.Instance.LoadingWindow = loadingWindow;
-                loadingWindow.Owner = MainWindow.Instance;
+                if (MainWindow.Instance != null)
+                {
+                    MainWindow.Instance.LoadingWindow = loadingWindow;
+                    loadingWindow.Owner = MainWindow.Instance;
+                }
+
                 loadingWindow.Show();
 
                 // Perform necessary operations with the loadingWindow
@@ -69,6 +73,7 @@ namespace OfflineInstaller._managers
             }
 
             MockConsole.WriteLine($"Software downloaded from {Mode}.");
+            ResetDownloadProgress();
         }
 
         ///<summary>
@@ -103,7 +108,7 @@ namespace OfflineInstaller._managers
                 // Unzip the launcher for the internal server
                 _viewModel.DownloadText = $"Extracting {char.ToUpper(software[0]) + software[1..]} software.";
 
-                string savePath = @$"{MainWindow.installerLocation}\_programs\{fileName}.zip";
+                string savePath = @$"{MainWindow.InstallerLocation}\_programs\{fileName}.zip";
                 await FileManager.UnzipFolderAsync(savePath, $@"{Path.GetDirectoryName(savePath)}\{fileName}", Progress);
             }
         }
@@ -123,9 +128,22 @@ namespace OfflineInstaller._managers
             string downloadUrl = $"{serverUrl}/program-{software}"; // Specify the URL of the zip folder to download
 
             string name = string.IsNullOrEmpty(overrideFileName) ? software : overrideFileName;
-            string savePath = @$"{MainWindow.installerLocation}\_programs\{name}.zip"; // Specify the path where you want to save the downloaded file
+            string savePath = @$"{MainWindow.InstallerLocation}\_programs\{name}.zip"; // Specify the path where you want to save the downloaded file
 
             await Download(downloadUrl, savePath);
+        }
+
+        /// <summary>
+        /// After all downloads have finished, reset the text values 
+        /// </summary>
+        private static void ResetDownloadProgress()
+        {
+            // Update your UI or perform any action based on the progress percentage
+            if (_viewModel != null)
+            {
+                _viewModel.DownloadProgressText = "0%";
+                _viewModel.DownloadProgress = 0;
+            }
         }
 
         ///<summary>
@@ -138,11 +156,10 @@ namespace OfflineInstaller._managers
             get => new Progress<double>(progressPercentage =>
             {
                 // Update your UI or perform any action based on the progress percentage
-                if (_viewModel != null)
-                {
-                    _viewModel.DownloadProgressText = $"{progressPercentage}%";
-                    _viewModel.DownloadProgress = progressPercentage;
-                }
+                if (_viewModel == null) return;
+                
+                _viewModel.DownloadProgressText = $"{progressPercentage}%";
+                _viewModel.DownloadProgress = progressPercentage;
             });
         }
 
@@ -163,9 +180,9 @@ namespace OfflineInstaller._managers
                 HttpResponseMessage response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
 
-                using (Stream contentStream = await response.Content.ReadAsStreamAsync())
+                await using (Stream contentStream = await response.Content.ReadAsStreamAsync())
                 {
-                    using FileStream fileStream = new(savePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    await using FileStream fileStream = new(savePath, FileMode.Create, FileAccess.Write, FileShare.None);
                     
                     byte[] buffer = new byte[8192]; // Set the buffer size according to your needs
                     int bytesRead;
@@ -211,8 +228,8 @@ namespace OfflineInstaller._managers
 
             MockConsole.WriteLine($"Downloading Launcher.");
 
-            string serverUrl = $"{LauncherURL}/download-folder";
-            string destinationPath = @$"{MainWindow.installerLocation}\_programs\electron-launcher\";
+            string serverUrl = $"{LauncherUrl}/download-folder";
+            string destinationPath = @$"{MainWindow.InstallerLocation}\_programs\electron-launcher\";
 
             using HttpClient client = new HttpClient();
             try
@@ -250,6 +267,18 @@ namespace OfflineInstaller._managers
                     }
 
                     MockConsole.WriteLine("Electron folder downloaded successfully.");
+                    
+                    
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        //Update the text block and the version map
+                        TextBlock textBlock = MainWindow.Instance.GetTextBlock("Launcher");
+                        if (textBlock == null) return;
+                    
+                        string version = FileManager.ExtractVersionFromYaml();
+                        textBlock.Text = version;
+                        MainWindow.Instance.VersionMap["Launcher"] = version;
+                    });
                 }
                 else
                 {
@@ -276,8 +305,8 @@ namespace OfflineInstaller._managers
             string filePath = Path.Combine(destinationPath, sanitizedFileName);
 
             using HttpResponseMessage fileResponse = await client.GetAsync(baseUrl + "/" + file);
-            using Stream contentStream = await fileResponse.Content.ReadAsStreamAsync();
-            using Stream fileStream = File.Create(filePath);
+            await using Stream contentStream = await fileResponse.Content.ReadAsStreamAsync();
+            await using Stream fileStream = File.Create(filePath);
             await contentStream.CopyToAsync(fileStream);
         }
 

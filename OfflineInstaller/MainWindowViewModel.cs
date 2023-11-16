@@ -26,6 +26,20 @@ namespace OfflineInstaller
             get => _consoleText;
             set => SetProperty(ref _consoleText, value);
         }
+        
+        /// <summary>
+        /// Display what question the user is being asked.
+        /// </summary>
+        private string _titleText;
+
+        ///<summary>
+        /// Gets or sets the text value of the title text.
+        ///</summary>
+        public string TitleText
+        {
+            get => _titleText;
+            set => SetProperty(ref _titleText, value);
+        }
 
         /// <summary>
         /// Display what software is currently being downloaded, unzipped or otherwise being worked on.
