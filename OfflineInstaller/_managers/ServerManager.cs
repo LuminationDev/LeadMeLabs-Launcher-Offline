@@ -139,8 +139,7 @@ namespace OfflineInstaller._managers
                 return;
             }
 
-            //string response = $"{version} {programName}";
-            string response = $"1.0.1 {programName}";
+            string response = $"{version} {programName}";
             SendResponse(context, response);
         }
 
