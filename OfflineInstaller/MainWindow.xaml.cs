@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using OfflineInstaller._pages;
 
 namespace OfflineInstaller
 {
@@ -19,21 +20,24 @@ namespace OfflineInstaller
     {
         public static MainWindow? Instance { get; private set; }
         public LoadingWindow? LoadingWindow { get; set; }
+        private ConfirmWindow? ConfirmWindow { get; set; }
+        private MainWindowViewModel ViewModel { get; set; }
 
-        public static string? installerLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+        public static readonly string? InstallerLocation = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 
-        private readonly Dictionary<string, TextBlock> textBlockMap = new();
-        public readonly Dictionary<string, string> versionMap = new();
+        private readonly Dictionary<string, TextBlock> _textBlockMap = new();
+        public readonly Dictionary<string, string> VersionMap = new();
 
         public MainWindow()
         {
             InitializeComponent();
 
-            var viewModel = new MainWindowViewModel();
-            this.DataContext = viewModel;
-            MockConsole.SetViewModel(viewModel);
-            DownloadManager.SetViewModel(viewModel);
+            ViewModel = new MainWindowViewModel();
+            this.DataContext = ViewModel;
+            MockConsole.SetViewModel(ViewModel);
+            DownloadManager.SetViewModel(ViewModel);
             LocationChanged += MainWindow_LocationChanged;
+            Loaded += AskUserToCreateInboundRule;
             Instance = this;
 
             // Check if in admin mode first
@@ -44,7 +48,7 @@ namespace OfflineInstaller
                 return;
             }
 
-            textBlockMap = new Dictionary<string, TextBlock>
+            _textBlockMap = new Dictionary<string, TextBlock>
             {
                 { "Launcher", LauncherVersion },
                 { "NUC", NucVersion },
@@ -65,12 +69,20 @@ namespace OfflineInstaller
         /// <param name="e">The event arguments.</param>
         private void MainWindow_LocationChanged(object? sender, EventArgs e)
         {
-            if (LoadingWindow != null && LoadingWindow.IsVisible)
+            if (LoadingWindow is { IsVisible: true })
             {
                 double left = Left + (Width - LoadingWindow.ActualWidth) / 2;
                 double top = Top + (Height - LoadingWindow.ActualHeight) / 2;
                 LoadingWindow.Left = left;
                 LoadingWindow.Top = top;
+            }
+            
+            if (ConfirmWindow is { IsVisible: true })
+            {
+                double left = Left + (Width - ConfirmWindow.ActualWidth) / 2;
+                double top = Top + (Height - ConfirmWindow.ActualHeight) / 2;
+                ConfirmWindow.Left = left;
+                ConfirmWindow.Top = top;
             }
         }
 
@@ -87,17 +99,80 @@ namespace OfflineInstaller
             Update.IsEnabled = connection;
 
             MockConsole.WriteLine($"Internet connection available: {connection}");
-
-            if (!FirewallManager.IsPortAllowed())
-            {
-                MockConsole.WriteLine($"WARNING: Port 8088 for TCP connection is not permitted in Inbound Rules. " +
-                    $"Cannot serve programs over the network, only on the local computer");
-            }
-
+            
             // Start up the internal server if there is not internet.
             if(!connection)
             {
                 ServerManager.StartServer();
+            }
+            else
+            {
+                MockConsole.WriteLine($"WARNING: Internet detected, server will not auto start.");
+            }
+        }
+
+        /// <summary>
+        /// Prompt the user if they wish to create the inbound tcp firewall rule automatically if it is not already
+        /// present.
+        /// </summary>
+        private void AskUserToCreateInboundRule(object? sender, EventArgs e)
+        {
+            if (FirewallManager.IsPortAllowed()) return;
+            
+            MockConsole.WriteLine($"WARNING: Port 8088 for TCP connection is not permitted in Inbound Rules. " +
+                                  $"Cannot serve programs over the network, only on the local computer");
+            
+            try
+            {
+                ViewModel.TitleText = "Would you like to create the Inbound Rule?";
+                using ConfirmWindow confirmWindow = new(ViewModel);
+                
+                if (MainWindow.Instance != null)
+                {
+                    MainWindow.Instance.ConfirmWindow = confirmWindow;
+                    confirmWindow.Owner = MainWindow.Instance;
+                }
+                
+                var result = confirmWindow.ShowDialog();
+
+                    
+                // Await user interaction
+                // Check the DialogResult property to get the user's choice
+                if (result.HasValue && result.Value)
+                {
+                    MockConsole.ClearConsole();
+                    
+                    // Perform actions for confirm
+                    MockConsole.WriteLine("Attempting to create inbound rule.");
+                    FirewallManager.CreateInboundRule();
+                    
+                    if (!FirewallManager.IsPortAllowed())
+                    {
+                        MockConsole.WriteLine($"WARNING: Port 8088 for TCP connection is not permitted in Inbound Rules. " +
+                                              $"Cannot serve programs over the network, only on the local computer");
+                    }
+                    else
+                    {
+                        MockConsole.WriteLine("Inbound rule created successfully.");
+                        CheckForNetworkConnection();
+                        CheckProgramVersions();
+                    }
+                }
+                else
+                {
+                    // Perform actions for cancel
+                    MockConsole.WriteLine("User clicked Cancel or closed the window.");
+                }
+
+                // Close the confirmWindow when you're done with it
+                confirmWindow.Close();
+
+                // Dispose of the confirmWindow and release any associated resources
+                confirmWindow.Dispose();
+            }
+            catch (Exception ex)
+            {
+                MockConsole.WriteLine($"ERROR: {ex}");
             }
         }
 
@@ -106,7 +181,7 @@ namespace OfflineInstaller
         /// If the 'delay' parameter is set to true, it adds a delay before retrieving the versions.
         ///</summary>
         ///<param name="delay">Flag indicating whether to introduce a delay before retrieving the versions.</param>
-        public void CheckProgramVersions(bool delay = false)
+        private void CheckProgramVersions(bool delay = false)
         {
             Task.Run(() =>
             {
@@ -125,8 +200,8 @@ namespace OfflineInstaller
                 string nucVersion = FileManager.CheckProgramVersion("nuc");
                 string stationVersion = FileManager.CheckProgramVersion("station");
 
-                versionMap["nuc"] = nucVersion;
-                versionMap["station"] = stationVersion;
+                VersionMap["nuc"] = nucVersion;
+                VersionMap["station"] = stationVersion;
 
                 // Update the UI with the version numbers
                 Application.Current.Dispatcher.Invoke(() =>
@@ -145,7 +220,7 @@ namespace OfflineInstaller
         /// <returns>The TextBlock associated with the program name, or null if not found.</returns>
         public TextBlock? GetTextBlock(string programName)
         {
-            textBlockMap.TryGetValue(programName, out TextBlock? textBlock);
+            _textBlockMap.TryGetValue(programName, out TextBlock? textBlock);
             return textBlock;
         }
 

@@ -1,6 +1,7 @@
 ﻿using NetFwTypeLib;
 using System;
 using System.Diagnostics;
+using OfflineInstaller._notification;
 
 namespace OfflineInstaller._managers
 {
@@ -97,6 +98,49 @@ namespace OfflineInstaller._managers
             }
 
             return false;
+        }
+
+        public static void CreateInboundRule()
+        {
+            // Create an instance of the firewall manager
+            var type = Type.GetTypeFromProgID("HNetCfg.FwPolicy2");
+            if (type == null)
+            {
+                MockConsole.WriteLine($"Cannot auto create rule, please manually create it.");
+                return;
+            }
+            
+            var firewall = Activator.CreateInstance(type) as INetFwPolicy2;
+
+            if (firewall == null)
+            {
+                MockConsole.WriteLine($"Cannot auto create rule, please manually create it.");
+                return;
+            }
+
+            // Create a new firewall rule
+            var rule = Activator.CreateInstance(Type.GetTypeFromProgID("HNetCfg.FWRule")) as INetFwRule2;
+            
+            if (rule == null)
+            {
+                MockConsole.WriteLine($"Cannot auto create rule, please manually create it.");
+                return;
+            }
+
+            // Set the rule properties
+            rule.Name = "OfflineInstaller";
+            rule.Description = "Allow incoming connections on port 8088";
+            rule.Protocol = (int)NET_FW_IP_PROTOCOL_.NET_FW_IP_PROTOCOL_TCP;
+            rule.LocalPorts = "8088";
+            rule.Action = NET_FW_ACTION_.NET_FW_ACTION_ALLOW;
+            rule.Direction = NET_FW_RULE_DIRECTION_.NET_FW_RULE_DIR_IN;
+            rule.Enabled = true;
+
+            // Set the rule to apply to all profiles (domain, private, public)
+            rule.Profiles = (int)NET_FW_PROFILE_TYPE2_.NET_FW_PROFILE2_ALL;
+
+            // Add the rule to the firewall
+            firewall.Rules.Add(rule);
         }
     }
 }

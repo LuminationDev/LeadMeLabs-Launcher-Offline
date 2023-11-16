@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace OfflineInstaller._managers
 {
-    public class ServerManager
+    public static class ServerManager
     {
-        private static HttpListener? listener;
+        private static HttpListener? _listener;
 
         ///<summary>
         /// Starts a server using the HttpListener class to handle incoming HTTP requests.
@@ -17,12 +17,12 @@ namespace OfflineInstaller._managers
         {
             MockConsole.WriteLine("Starting server.");
 
-            listener = new HttpListener();
-            listener.Prefixes.Add("http://+:8088/");
+            _listener = new HttpListener();
+            _listener.Prefixes.Add("http://+:8088/");
 
             try
             {
-                listener.Start();
+                _listener.Start();
                 MockConsole.WriteLine("Server started. Listening for requests...");
 
                 // Start a new thread to handle incoming requests
@@ -40,14 +40,14 @@ namespace OfflineInstaller._managers
         ///</summary>
         private static void Listen()
         {
-            if (listener == null) return;
+            if (_listener == null) return;
 
-            while (listener.IsListening)
+            while (_listener.IsListening)
             {
                 try
                 {
                     MockConsole.WriteLine("Waiting for new connection.");
-                    HttpListenerContext context = listener.GetContext();
+                    HttpListenerContext context = _listener.GetContext();
                     Task.Run(() => HandleRequest(context));
                 }
                 catch (Exception ex)
@@ -125,7 +125,7 @@ namespace OfflineInstaller._managers
         /// <param name="programName">The name of the program.</param>
         private static void ServeProgramVersion(HttpListenerContext context, string programName)
         {
-            string? version = MainWindow.Instance.versionMap[programName];
+            string? version = MainWindow.Instance.VersionMap[programName];
             if (version == null || string.IsNullOrWhiteSpace(version))
             {
                 SendResponse(context, "404 Not Found", HttpStatusCode.NotFound);
@@ -194,7 +194,7 @@ namespace OfflineInstaller._managers
         ///<param name="relativePath">The relative path of the static file to be served.</param>
         private static void ServeStaticFile(HttpListenerContext context, string relativePath)
         {
-            string file = string.Concat(MainWindow.installerLocation, @"\" , relativePath, context.Request.Url.LocalPath.AsSpan("/static/electron-launcher".Length));
+            string file = string.Concat(MainWindow.InstallerLocation, @"\" , relativePath, context.Request.Url.LocalPath.AsSpan("/static/electron-launcher".Length));
             if (File.Exists(file))
             {
                 context.Response.ContentType = GetMimeType(file);
@@ -256,10 +256,10 @@ namespace OfflineInstaller._managers
         ///</summary>
         public static void StopServer()
         {
-            if (listener != null && listener.IsListening)
+            if (_listener != null && _listener.IsListening)
             {
                 MockConsole.WriteLine("Stopping server.");
-                listener.Stop();
+                _listener.Stop();
                 MockConsole.WriteLine("Server stopped.");
             }
             else

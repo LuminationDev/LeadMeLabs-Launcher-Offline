@@ -6,9 +6,9 @@ namespace OfflineInstaller._pages;
 /// <summary>
 /// Interaction logic for LoadingWindow.xaml
 /// </summary>
-public partial class LoadingWindow : Window, IDisposable
+public partial class ConfirmWindow : Window, IDisposable
 {
-    public LoadingWindow(MainWindowViewModel viewModel)
+    public ConfirmWindow(MainWindowViewModel viewModel)
     {
         InitializeComponent();
         DataContext = viewModel;
@@ -30,5 +30,17 @@ public partial class LoadingWindow : Window, IDisposable
 
         // Dispose of any unmanaged resources here
         // Example: Close file handles, database connections, etc.
+    }
+    
+    private void ConfirmButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Set DialogResult to true to indicate a positive result
+        DialogResult = true;
+    }
+
+    private void CancelButton_Click(object sender, RoutedEventArgs e)
+    {
+        // Set DialogResult to false to indicate a negative result
+        DialogResult = false;
     }
 }

@@ -11,7 +11,7 @@ using System.Windows.Controls;
 
 namespace OfflineInstaller._managers
 {
-    public class FileManager
+    public static class FileManager
     {
         ///<summary>
         /// Asynchronously unzips a folder from a specified zip file to a destination folder path, while reporting the progress.
@@ -32,7 +32,7 @@ namespace OfflineInstaller._managers
             byte[] buffer = new byte[4096];
             long totalBytes = 0;
 
-            using (FileStream zipFile = new(zipFilePath, FileMode.Open))
+            await using (FileStream zipFile = new(zipFilePath, FileMode.Open))
             using (ZipArchive archive = new(zipFile, ZipArchiveMode.Read))
             {
                 long totalBytesToExtract = archive.Entries.Sum(entry => entry.Length);
@@ -40,25 +40,26 @@ namespace OfflineInstaller._managers
                 foreach (ZipArchiveEntry entry in archive.Entries)
                 {
                     string entryPath = Path.Combine(destinationFolderPath, entry.FullName);
-                    string entryDirPath = Path.GetDirectoryName(entryPath);
+                    string? entryDirPath = Path.GetDirectoryName(entryPath);
 
+                    if (string.IsNullOrEmpty(entryDirPath)) continue;
+                    
                     // Create the directory if it doesn't exist
                     Directory.CreateDirectory(entryDirPath);
 
-                    if (!string.IsNullOrEmpty(entry.Name))
-                    {
-                        using Stream entryStream = entry.Open();
-                        using FileStream destinationStream = new(entryPath, FileMode.Create);
-                        int bytesRead;
-                        while ((bytesRead = await entryStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                        {
-                            await destinationStream.WriteAsync(buffer, 0, bytesRead);
-                            totalBytes += bytesRead;
+                    if (string.IsNullOrEmpty(entry.Name)) continue;
 
-                            double progressPercentage = (double)totalBytes / totalBytesToExtract * 100;
-                            double roundedProgress = Math.Round(progressPercentage, 2);
-                            progress?.Report(roundedProgress);
-                        }
+                    await using Stream entryStream = entry.Open();
+                    await using FileStream destinationStream = new(entryPath, FileMode.Create);
+                    int bytesRead;
+                    while ((bytesRead = await entryStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    {
+                        await destinationStream.WriteAsync(buffer, 0, bytesRead);
+                        totalBytes += bytesRead;
+
+                        double progressPercentage = (double)totalBytes / totalBytesToExtract * 100;
+                        double roundedProgress = Math.Round(progressPercentage, 2);
+                        progress?.Report(roundedProgress);
                     }
                 }
             }
@@ -75,17 +76,16 @@ namespace OfflineInstaller._managers
             await Task.Run(() =>
             {
                 string fileName = Path.GetFileNameWithoutExtension(zipFilePath);
-                string version = zipFilePath.Contains("Launcher") ? version = ExtractVersionFromYaml() : version = CheckProgramVersion(fileName);
+                string version = zipFilePath.Contains("electron-launcher") ? version = ExtractVersionFromYaml() : version = CheckProgramVersion(fileName);
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     //Update the text block and the version map
                     TextBlock textBlock = MainWindow.Instance.GetTextBlock(fileName);
-                    if(textBlock != null)
-                    {
-                        textBlock.Text = version;
-                        MainWindow.Instance.versionMap[fileName] = version;
-                    }
+                    if (textBlock == null) return;
+                    
+                    textBlock.Text = version;
+                    MainWindow.Instance.VersionMap[fileName] = version;
                 });
             });
         }
@@ -98,7 +98,7 @@ namespace OfflineInstaller._managers
         public static string CheckProgramVersion(string programName)
         {
             // Specify the path to the program you want to start
-            string programPath = @$"{MainWindow.installerLocation}\_programs\{programName}\";
+            string programPath = @$"{MainWindow.InstallerLocation}\_programs\{programName}\";
 
             string programExecutable = $"{programName}.exe";
             string programVersion = $@"_logs\version.txt";
@@ -116,6 +116,7 @@ namespace OfflineInstaller._managers
             process.WaitForExit();
 
             string fileContent = File.ReadAllText(programPath + programVersion);
+            MockConsole.WriteLine($"{programName} version downloaded: {fileContent}");
             return string.IsNullOrEmpty(fileContent) ? "Unknown" : fileContent;
         }
 
@@ -125,7 +126,7 @@ namespace OfflineInstaller._managers
         /// <returns>The extracted version number, or "Not found" if the file is not found, or "Unknown" if the version pattern is not found.</returns>
         public static string ExtractVersionFromYaml()
         {
-            string filePath = @$"{MainWindow.installerLocation}\_programs\electron-launcher\latest.yml";
+            string filePath = @$"{MainWindow.InstallerLocation}\_programs\electron-launcher\latest.yml";
 
             if (!File.Exists(filePath))
             {
@@ -136,7 +137,9 @@ namespace OfflineInstaller._managers
             string versionPattern = @"version:\s*(\d+\.\d+\.\d+)";
 
             Match match = Regex.Match(fileContent, versionPattern);
-            return match.Success ? match.Groups[1].Value : "Unknown";
+            string version = match.Success ? match.Groups[1].Value : "Unknown";
+            MockConsole.WriteLine($"Launcher version downloaded: {version}");
+            return version;
         }
     }
 }
