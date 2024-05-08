@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows;
+using OfflineInstaller.MVC.ViewModel;
 
 namespace OfflineInstaller._pages;
 
