@@ -1,13 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Http;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using Amazon.S3;
-using Amazon.S3.Model;
 using Newtonsoft.Json.Linq;
-using OfflineInstaller._pages;
 using OfflineInstaller.Components._notification;
 using OfflineInstaller.MVC.Controller;
 using OfflineInstaller.MVC.View;
@@ -19,15 +18,13 @@ public static class DownloadManager
 {
     // Track whether the software is from Development or Production
     private static string? Mode { get; set; }
-    private static string? VultrBucketName { get; set; }
-    private static string? VultrLauncherBucketName { get; set; }
-    private static string? VultrLauncherBucketPath { get; set; }
     private static string? BaseUrl { get; set; }
     private static string? LauncherUrl { get; set; }
+    private static string? VultrLauncherBucketPath { get; set; }
     
-    // Set Vultr Object Storage credentials and file information
-    private const string AccessKey = "6561KRO6F7MZF4RR5Y9X";
-    private const string SecretKey = "CqChoBKwxY0ROaXuUJjZ9XHrp02wApmAvxaNdx1t";
+    //Track how many files have been downloaded
+    private static int _launchFileCount = 0;
+    private const int LaunchFileNumber = 37;
 
     private static MainWindowViewModel? _viewModel;
 
@@ -43,8 +40,6 @@ public static class DownloadManager
     public static async void UpdateAllPrograms(bool isProduction)
     {
         Mode = isProduction ? "production" : "development";
-
-        // Determine if Vultr can be reached, otherwise use heroku as the backup
         
 #if DEBUG
         BaseUrl = "http://localhost:8082"; //For testing purposes only    
@@ -52,13 +47,11 @@ public static class DownloadManager
 #elif RELEASE
         if (MainController.CanAccessVultr)
         {
-            BaseUrl = "https://sgp1.vultrobjects.com";
-            
-            VultrBucketName = Mode.Equals("development")
-                ? "leadme-internal-debug"
-                : "leadme-internal";
-            
-            VultrLauncherBucketName = "leadme-tools";
+            BaseUrl = Mode.Equals("development")
+                ? "https://leadme-internal-debug.sgp1.vultrobjects.com"
+                : "https://leadme-internal.sgp1.vultrobjects.com";
+
+            LauncherUrl = "https://leadme-tools.sgp1.vultrobjects.com";
             
             VultrLauncherBucketPath = Mode.Equals("development")
                 ? "leadme-launcher-debug"
@@ -97,7 +90,7 @@ public static class DownloadManager
             // Perform necessary operations with the loadingWindow
             await DownloadSoftware("nuc");
             await DownloadSoftware("station");
-            await DownloadSoftware("steamcmd"); //TODO this will be depreciated soon
+            await DownloadSoftware("steamcmd");
 
             if (MainController.CanAccessVultr)
             {
@@ -149,10 +142,7 @@ public static class DownloadManager
         if(software.Equals("station") || software.Equals("nuc"))
         {
             // Unzip the launcher for the internal server
-            if (_viewModel != null)
-            {
-                _viewModel.DownloadText = $"Extracting {char.ToUpper(software[0]) + software[1..]} software.";
-            }
+            UpdateDownloadText($"Extracting {char.ToUpper(software[0]) + software[1..]} software.");
 
             string savePath = @$"{MainWindow.InstallerLocation}\_programs\{fileName}.zip";
             await FileManager.UnzipFolderAsync(savePath, $@"{Path.GetDirectoryName(savePath)}\{fileName}", Progress);
@@ -164,28 +154,27 @@ public static class DownloadManager
     /// </summary>
     private static async Task DownloadProgram(string serverUrl, string software, string overrideFileName = "")
     {
-        if (_viewModel != null)
-        {
-            _viewModel.DownloadText = $"Downloading {char.ToUpper(software[0]) + software[1..]} software.";
-        }
-
+        UpdateDownloadText($"Downloading {char.ToUpper(software[0]) + software[1..]} software.");
+        UpdateDownloadFileText($"{overrideFileName}.zip");
+        
         MockConsole.WriteLine($"Downloading {char.ToUpper(software[0]) + software[1..]}.");
         
         string name = string.IsNullOrEmpty(overrideFileName) ? software : overrideFileName;
         string savePath = @$"{MainWindow.InstallerLocation}\_programs\{name}.zip"; // Specify the path where you want to save the downloaded file
 
+        string downloadUrl;
         if (MainController.CanAccessVultr)
         {
             MockConsole.WriteLine("Downloading from Vultr.");
-            string bucketPath = $"{overrideFileName}/{overrideFileName}.zip";
-            await DownloadVultr(bucketPath, savePath);
+            downloadUrl = $"{BaseUrl}/{overrideFileName}/{overrideFileName}.zip";
         }
         else
         {
             MockConsole.WriteLine("Downloading from Heroku.");
-            var downloadUrl = $"{serverUrl}/program-{software}"; // Specify the URL of the zip folder to download
-            await Download(downloadUrl, savePath);
+            downloadUrl = $"{serverUrl}/program-{software}"; // Specify the URL of the zip folder to download
         }
+        
+        await Download(downloadUrl, savePath);
     }
 
     /// <summary>
@@ -263,58 +252,6 @@ public static class DownloadManager
         }
     }
 
-    /// <summary>
-    /// Downloads a file from Vultr Object Storage asynchronously.
-    /// </summary>
-    /// <param name="bucketPath">The path of the file in the Vultr Object Storage bucket.</param>
-    /// <param name="savePath">The local path where the downloaded file will be saved.</param>
-    /// <returns>A task representing the asynchronous download operation.</returns>
-    private static async Task DownloadVultr(string bucketPath, string savePath)
-    {
-        IProgress<double> progress = Progress;
-        
-        using var client = new AmazonS3Client(AccessKey, SecretKey, new AmazonS3Config
-        {
-            ServiceURL = BaseUrl
-        });
-
-        var request = new GetObjectRequest
-        {
-            BucketName = VultrBucketName,
-            Key = bucketPath
-        };
-        
-        try
-        {
-            // Get the object from Vultr Object Storage
-            using var response = await client.GetObjectAsync(request);
-            await using var responseStream = response.ResponseStream;
-            await using var fileStream = new FileStream(savePath, FileMode.Create, FileAccess.Write, FileShare.None);
-
-            var buffer = new byte[32768]; // 32KB buffer (adjust as needed)
-            var totalBytesRead = 0L;
-            var totalFileSize = response.ContentLength;
-
-            int bytesRead;
-            while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-            {
-                // Write the buffer to the file stream
-                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                totalBytesRead += bytesRead;
-
-                // Calculate and report progress percentage
-                var progressPercentage = (double)totalBytesRead / totalFileSize * 100;
-                progress?.Report(progressPercentage);
-            }
-
-            MockConsole.WriteLine("File downloaded successfully.");
-        }
-        catch (Exception ex)
-        {
-            MockConsole.WriteLine("An error occurred during file download: " + ex.Message);
-        }
-    }
-
     #region Electron Download
     /// <summary>
     /// Downloads the Launcher software from Vultr Object Storage asynchronously.
@@ -327,119 +264,225 @@ public static class DownloadManager
     /// <returns>A task representing the asynchronous download operation.</returns>
     private static async Task DownloadVultrLauncher()
     {
-        IProgress<double> progress = Progress;
-        
-        if (_viewModel != null)
+        UpdateDownloadText("Downloading Launcher software.");
+
+        string baseBucketPath = $"{LauncherUrl}/{VultrLauncherBucketPath}";
+        string destinationPath = Path.Combine(MainWindow.InstallerLocation, "_programs", "electron-launcher");
+
+        Directory.CreateDirectory(destinationPath);
+        string version = await DownloadLatestYaml(baseBucketPath, destinationPath);
+
+        if (string.IsNullOrEmpty(version))
         {
-            _viewModel.DownloadText = $"Downloading Launcher software.";
+            MockConsole.WriteLine("Could not read latest.yml");
+            return;
         }
 
-        MockConsole.WriteLine($"Downloading Launcher from Vultr.");
-        
-        using var client = new AmazonS3Client(AccessKey, SecretKey, new AmazonS3Config
-        {
-            ServiceURL = BaseUrl
-        });
+        await DownloadExecutables(baseBucketPath, destinationPath, version);
+        await DownloadWinUnpackedFiles(baseBucketPath, destinationPath);
+        await DownloadBatchFiles(baseBucketPath, destinationPath);
+        await DownloadResourcesFiles(baseBucketPath, destinationPath);
 
-        var listObjectsRequest = new ListObjectsV2Request
+        UpdateLauncherVersion();
+    }
+
+    /// <summary>
+    /// Downloads the latest YAML file from the specified base bucket path and saves it to the destination folder.
+    /// Parses the YAML content to extract the version information.
+    /// </summary>
+    /// <param name="baseBucketPath">The base path of the bucket where the latest YAML file is located.</param>
+    /// <param name="destinationPath">The local destination folder where the YAML file will be saved.</param>
+    /// <returns>The version string extracted from the YAML content, or "Unknown" if parsing fails.</returns>
+    private static async Task<string> DownloadLatestYaml(string baseBucketPath, string destinationPath)
+    {
+        string latestYamlUrl = $"{baseBucketPath}/latest.yml";
+        string latestYamlFilePath = Path.Combine(destinationPath, "latest.yml");
+
+        using HttpClient client = new HttpClient();
+        
+        HttpResponseMessage response = await client.GetAsync(latestYamlUrl, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+
+        string yamlContent = await response.Content.ReadAsStringAsync();
+        await File.WriteAllTextAsync(latestYamlFilePath, yamlContent);
+        
+        string versionPattern = @"version:\s*(\d+\.\d+\.\d+)";
+        Match match = Regex.Match(yamlContent, versionPattern);
+        return match.Success ? match.Groups[1].Value : "Unknown";
+    }
+
+    /// <summary>
+    /// Downloads the executable files associated with the specified version from the base bucket path.
+    /// </summary>
+    /// <param name="baseBucketPath">The base path of the bucket where the executable files are located.</param>
+    /// <param name="destinationPath">The local destination folder where the executable files will be saved.</param>
+    /// <param name="version">The version number of the executable files to download.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private static async Task DownloadExecutables(string baseBucketPath, string destinationPath, string version)
+    {
+        await DownloadVultrFile($"{baseBucketPath}/LeadMe Setup {version}.exe", Path.Combine(destinationPath, $"LeadMe Setup {version}.exe"), $"LeadMe Setup {version}.exe");
+        await DownloadVultrFile($"{baseBucketPath}/LeadMe Setup {version}.exe.blockmap", Path.Combine(destinationPath, $"LeadMe Setup {version}.exe.blockmap"), $"LeadMe Setup {version}.exe.blockmap");
+    }
+
+    /// <summary>
+    /// Downloads files related to the win-unpacked folder from the specified Vultr bucket to the destination path.
+    /// </summary>
+    /// <param name="baseBucketPath">The base path of the Vultr bucket.</param>
+    /// <param name="destinationPath">The destination path where the files will be saved.</param>
+    private static async Task DownloadWinUnpackedFiles(string baseBucketPath, string destinationPath)
+    {
+        string winFolder = Path.Combine(destinationPath, "win-unpacked");
+        Directory.CreateDirectory(winFolder);
+        
+        var filesToDownload = new List<string>
         {
-            BucketName = VultrLauncherBucketName,
-            Prefix = VultrLauncherBucketPath + "/"
+            "LICENSE.electron.txt",
+            "LICENSES.chromium.html",
+            "chrome_100_percent.pak",
+            "chrome_200_percent.pak",
+            "d3dcompiler_47.dll",
+            "ffmpeg.dll",
+            "icudtl.dat",
+            "libEGL.dll",
+            "libGLESv2.dll",
+            "resources.pak",
+            "snapshot_blob.bin",
+            "v8_context_snapshot.bin",
+            "vk_swiftshader.dll",
+            "vk_swiftshader_icd.json",
+            "vulkan-1.dll"
         };
         
-        try
+        await DownloadBatchFiles(filesToDownload, baseBucketPath, destinationPath, "win-unpacked");
+    }
+
+    /// <summary>
+    /// Downloads batch files from the specified Vultr bucket to the destination path.
+    /// </summary>
+    /// <param name="baseBucketPath">The base path of the Vultr bucket.</param>
+    /// <param name="destinationPath">The destination path where the files will be saved.</param>
+    private static async Task DownloadBatchFiles(string baseBucketPath, string destinationPath)
+    {
+        string batchFolder = Path.Combine(destinationPath, "win-unpacked", "_batch");
+        Directory.CreateDirectory(batchFolder);
+        
+        var filesToDownload = new List<string>
         {
-            var listObjectsResponse = await client.ListObjectsV2Async(listObjectsRequest);
+            "LeadMeLabs-NucChecker.deps.json",
+            "LeadMeLabs-NucChecker.dll",
+            "LeadMeLabs-NucChecker.exe",
+            "LeadMeLabs-NucChecker.pdb",
+            "LeadMeLabs-NucChecker.runtimeconfig.json",
+            "LeadMeLabs-SoftwareChecker.deps.json",
+            "LeadMeLabs-SoftwareChecker.dll",
+            "LeadMeLabs-SoftwareChecker.exe",
+            "LeadMeLabs-SoftwareChecker.pdb",
+            "LeadMeLabs-SoftwareChecker.runtimeconfig.json",
+            "LeadMeLabs-StationChecker.deps.json",
+            "LeadMeLabs-StationChecker.deps.json",
+            "LeadMeLabs-StationChecker.dll",
+            "LeadMeLabs-StationChecker.exe",
+            "LeadMeLabs-StationChecker.pdb",
+            "LeadMeLabs-StationChecker.runtimeconfig.json",
+            "README.md"
+        };
+        
+        await DownloadBatchFiles(filesToDownload, baseBucketPath, destinationPath, "win-unpacked/_batch");
+    }
 
-            var totalFiles = listObjectsResponse.S3Objects.Count;
-            var filesDownloaded = 0;
+    /// <summary>
+    /// Downloads resource files from the specified Vultr bucket to the destination path.
+    /// </summary>
+    /// <param name="baseBucketPath">The base path of the Vultr bucket.</param>
+    /// <param name="destinationPath">The destination path where the files will be saved.</param>
 
-            foreach (var s3Object in listObjectsResponse.S3Objects)
-            {
-                var getObjectRequest = new GetObjectRequest
-                {
-                    BucketName = VultrLauncherBucketName,
-                    Key = s3Object.Key
-                };
-
-                string destinationPath = @$"{MainWindow.InstallerLocation}\_programs\electron-launcher\";
-                
-                // Create the destination folder if it doesn't exist
-                Directory.CreateDirectory(destinationPath);
-                string subPath = s3Object.Key.Replace("leadme-launcher-debug/", "");
-                var localFilePath = Path.Combine(destinationPath, subPath);
-                
-                await DownloadObjectAsync(client, getObjectRequest, localFilePath, percentage =>
-                {
-                    progress.Report(percentage);
-                });
-
-                filesDownloaded++;
-                MockConsole.WriteLine($"File {filesDownloaded} of {totalFiles} downloaded.");
-            }
-
-            MockConsole.WriteLine("All files downloaded successfully.");
-            
-            Application.Current.Dispatcher.Invoke(() =>
-            {
-                //Update the text block and the version map
-                TextBlock? textBlock = MainWindow.Instance?.GetTextBlock("Launcher");
-                if (textBlock == null) return;
-
-                string version = FileManager.ExtractVersionFromYaml();
-                textBlock.Text = version;
-                if (MainWindow.Instance != null)
-                {
-                    MainWindow.Instance.VersionMap["Launcher"] = version;
-                }
-            });
-        }
-        catch (Exception ex)
+    private static async Task DownloadResourcesFiles(string baseBucketPath, string destinationPath)
+    {
+        string resourcesFolder = Path.Combine(destinationPath, "win-unpacked", "resources");
+        Directory.CreateDirectory(resourcesFolder);
+        
+        var filesToDownload = new List<string>
         {
-            MockConsole.WriteLine("An error occurred: " + ex.Message);
+            "app-update.yml",
+            "app.asar",
+            "elevate.exe"
+        };
+        
+        await DownloadBatchFiles(filesToDownload, baseBucketPath, destinationPath, "win-unpacked/resources");
+    }
+    
+    /// <summary>
+    /// Downloads files from the specified Vultr bucket to the destination path.
+    /// </summary>
+    /// <param name="fileNames">The list of file names to download.</param>
+    /// <param name="baseBucketPath">The base path of the Vultr bucket.</param>
+    /// <param name="destinationPath">The destination path where the files will be saved.</param>
+    /// <param name="subFolder">Optional. The subfolder within the bucket from which to download the files.</param>
+    private static async Task DownloadBatchFiles(IEnumerable<string> fileNames, string baseBucketPath, string destinationPath, string subFolder = "")
+    {
+        foreach (string fileName in fileNames)
+        {
+            string filePath = Path.Combine(destinationPath, subFolder, fileName);
+            string fileUrl = $"{baseBucketPath}/{subFolder}/{fileName}";
+
+            await DownloadVultrFile(fileUrl, filePath, fileName);
         }
     }
     
     /// <summary>
-    /// Downloads an object asynchronously from Vultr Object Storage and saves it to the specified local file path.
+    /// Downloads a file from the specified URL and saves it to the specified local path.
+    /// Reports download progress if a progress reporter is provided.
     /// </summary>
-    /// <param name="client">The Amazon S3 client used to perform the download operation.</param>
-    /// <param name="request">The request object specifying the bucket and key of the object to download.</param>
-    /// <param name="localFilePath">The local file path where the downloaded object will be saved.</param>
-    /// <param name="progressCallback">An optional callback to report the progress of the download operation.</param>
-    /// <returns>A task representing the asynchronous download operation.</returns>
-    private static async Task DownloadObjectAsync(AmazonS3Client client, GetObjectRequest request, string localFilePath, Action<double> progressCallback)
+    /// <param name="downloadUrl">The URL of the file to download.</param>
+    /// <param name="savePath">The local path where the downloaded file will be saved.</param>
+    /// <param name="fileName">The name of the file to be downloaded.</param>
+    /// <returns>A task representing the asynchronous operation.</returns>
+    private static async Task DownloadVultrFile(string downloadUrl, string savePath, string fileName)
     {
+        UpdateDownloadFileText(fileName);
+        
+        _launchFileCount++;
+        
+        IProgress<double> progress = Progress;
+        
+        var parentDirectory = Path.GetDirectoryName(savePath);
+        if (parentDirectory != null && !Directory.Exists(parentDirectory))
+        {
+            Directory.CreateDirectory(parentDirectory);
+        }
+        
+        using HttpClient client = new();
         try
         {
-            // Create the parent directory if it doesn't exist
-            var parentDirectory = Path.GetDirectoryName(localFilePath);
-            if (!Directory.Exists(parentDirectory) && parentDirectory != null)
+            HttpResponseMessage response = await client.GetAsync(downloadUrl, HttpCompletionOption.ResponseHeadersRead);
+            response.EnsureSuccessStatusCode();
+
+            await using (Stream contentStream = await response.Content.ReadAsStreamAsync())
             {
-                Directory.CreateDirectory(parentDirectory);
+                await using FileStream fileStream = new(savePath, FileMode.Create, FileAccess.Write, FileShare.None);
+                
+                byte[] buffer = new byte[32768]; // Set the buffer size according to your needs
+                int bytesRead;
+                long totalBytesRead = 0;
+                long totalBytes = response.Content.Headers.ContentLength ?? -1;
+
+                while ((bytesRead = await contentStream.ReadAsync(buffer)) > 0)
+                {
+                    await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                    totalBytesRead += bytesRead;
+
+                    if (totalBytes <= 0) continue;
+                    
+                    double progressPercentage = (double)((totalBytesRead * 100) / totalBytes);
+                    progress?.Report(progressPercentage);
+                }
             }
-            
-            using var response = await client.GetObjectAsync(request);
-            await using var responseStream = response.ResponseStream;
-            await using var fileStream = new FileStream(localFilePath, FileMode.Create, FileAccess.Write, FileShare.None);
 
-            var buffer = new byte[32768]; // 32KB buffer (adjust as needed)
-            var totalBytesRead = 0L;
-            var totalFileSize = response.ContentLength;
-
-            int bytesRead;
-            while ((bytesRead = await responseStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-            {
-                await fileStream.WriteAsync(buffer, 0, bytesRead);
-                totalBytesRead += bytesRead;
-
-                var progressPercentage = (double)totalBytesRead / totalFileSize * 100;
-                progressCallback?.Invoke(progressPercentage);
-            }
+            MockConsole.WriteLine($"File downloaded successfully {_launchFileCount} of {LaunchFileNumber}.");
         }
         catch (Exception ex)
         {
-            MockConsole.WriteLine($"Failed to download {request.Key}: {ex.Message}");
+            MockConsole.WriteLine($"An error occurred during file download of {fileName}: {ex.Message}");
         }
     }
     
@@ -452,10 +495,7 @@ public static class DownloadManager
     {
         IProgress<double> progress = Progress;
 
-        if (_viewModel != null)
-        {
-            _viewModel.DownloadText = $"Downloading Launcher software.";
-        }
+        UpdateDownloadText("Downloading Launcher software.");
 
         MockConsole.WriteLine($"Downloading Launcher from Heroku.");
 
@@ -499,21 +539,8 @@ public static class DownloadManager
                 }
 
                 MockConsole.WriteLine("Electron folder downloaded successfully.");
-
-
-                Application.Current.Dispatcher.Invoke(() =>
-                {
-                    //Update the text block and the version map
-                    TextBlock? textBlock = MainWindow.Instance?.GetTextBlock("Launcher");
-                    if (textBlock == null) return;
-
-                    string version = FileManager.ExtractVersionFromYaml();
-                    textBlock.Text = version;
-                    if (MainWindow.Instance != null)
-                    {
-                        MainWindow.Instance.VersionMap["Launcher"] = version;
-                    }
-                });
+                
+                UpdateLauncherVersion();
             }
             else
             {
@@ -617,6 +644,38 @@ public static class DownloadManager
             fileName = fileName.Replace(invalidChar, '_');
         }
         return fileName;
+    }
+    
+    private static void UpdateDownloadText(string message)
+    {
+        if (_viewModel != null)
+        {
+            _viewModel.DownloadText = message;
+        }
+    }
+    
+    private static void UpdateDownloadFileText(string message)
+    {
+        if (_viewModel != null)
+        {
+            _viewModel.DownloadFileText = message;
+        }
+    }
+    
+    private static void UpdateLauncherVersion()
+    {
+        Application.Current.Dispatcher.Invoke(() =>
+        {
+            TextBlock? textBlock = MainWindow.Instance?.GetTextBlock("Launcher");
+            if (textBlock == null) return;
+
+            string currentVersion = FileManager.ExtractVersionFromYaml();
+            textBlock.Text = currentVersion;
+            if (MainWindow.Instance != null)
+            {
+                MainWindow.Instance.VersionMap["Launcher"] = currentVersion;
+            }
+        });
     }
     #endregion
 }

@@ -2,7 +2,7 @@
 using System.Windows;
 using OfflineInstaller.MVC.ViewModel;
 
-namespace OfflineInstaller._pages;
+namespace OfflineInstaller.MVC.View;
 
 /// <summary>
 /// Interaction logic for LoadingWindow.xaml

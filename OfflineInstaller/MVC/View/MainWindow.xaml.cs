@@ -7,7 +7,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
-using OfflineInstaller._pages;
 using OfflineInstaller.Components._managers;
 using OfflineInstaller.Components._notification;
 using OfflineInstaller.MVC.Controller;

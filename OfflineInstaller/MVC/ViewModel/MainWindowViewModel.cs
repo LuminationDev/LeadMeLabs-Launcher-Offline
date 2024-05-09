@@ -46,6 +46,17 @@ public class MainWindowViewModel : ObservableRecipient
         set => SetProperty(ref _downloadText, value);
     }
 
+    private string _downloadFileText = "";
+    
+    ///<summary>
+    /// Gets or sets the text value of the downloading file text.
+    ///</summary>
+    public string DownloadFileText
+    {
+        get => _downloadFileText;
+        set => SetProperty(ref _downloadFileText, value);
+    }
+
     /// <summary>
     /// Display the current download percent as an int for the progress bar value.
     /// </summary>
