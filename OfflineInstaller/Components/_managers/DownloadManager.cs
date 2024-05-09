@@ -22,7 +22,8 @@ public static class DownloadManager
     private static string? LauncherUrl { get; set; }
     private static string? VultrLauncherBucketPath { get; set; }
     
-    //Track how many files have been downloaded
+    //Electron launcher requires 37 static files to be downloaded. Use the following variables to track how many
+    //files have been downloaded. This is purely for visual purposes to display to the user what is happening.
     private static int _launchFileCount = 0;
     private const int LaunchFileNumber = 37;
 
