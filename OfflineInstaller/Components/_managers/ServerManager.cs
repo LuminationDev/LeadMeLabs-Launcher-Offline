@@ -57,7 +57,7 @@ public static class ServerManager
             }
         }
     }
-
+    
     /// <summary>
     /// Handles incoming HTTP requests and routes them to different actions based on the requested URL.
     /// </summary>
@@ -74,21 +74,25 @@ public static class ServerManager
                 SendResponse(context, "Hello, World!");
                 break;
 
+            case "/nuc/nuc.zip":
             case "/program-nuc":
                 MockConsole.WriteLine("NUC file being served.");
                 ServeProgram(context, "NUC");
                 break;
 
+            case "/nuc/version":
             case "/program-nuc-version":
                 MockConsole.WriteLine("NUC version being checked.");
                 ServeProgramVersion(context, "nuc");
                 break;
 
+            case "/station/station.zip":
             case "/program-station":
                 MockConsole.WriteLine("Station file being served.");
                 ServeProgram(context, "Station");
                 break;
 
+            case "/station/version":
             case "/program-station-version":
                 MockConsole.WriteLine("Station version being checked.");
                 ServeProgramVersion(context, "station");
