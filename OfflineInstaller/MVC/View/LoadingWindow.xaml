@@ -1,9 +1,11 @@
-﻿<Window x:Class="OfflineInstaller._pages.LoadingWindow"
+﻿<Window x:Class="OfflineInstaller.MVC.View.LoadingWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:OfflineInstaller"
+        xmlns:converters="clr-namespace:OfflineInstaller.Converters"
+        xmlns:viewModel="clr-namespace:OfflineInstaller.MVC.ViewModel"
         mc:Ignorable="d"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
@@ -13,11 +15,11 @@
         Title="Download Progress" Height="350" Width="785"> 
 
     <Window.DataContext>
-        <local:MainWindowViewModel/>
+        <viewModel:MainWindowViewModel/>
     </Window.DataContext>
 
     <Window.Resources>
-        <local:PercentageToWidthConverter x:Key="PercentageToWidthConverter" />
+        <converters:PercentageToWidthConverter x:Key="PercentageToWidthConverter" />
 
         <Style x:Key="CustomProgressBarStyle" TargetType="ProgressBar">
             <Setter Property="Foreground" Value="#007ACC" />
@@ -74,6 +76,8 @@
                         TextAlignment="Center"
                         Text="{Binding DownloadProgressText}"/>
                 </WrapPanel>
+                
+                <TextBlock Margin="25,5,5,10" FontSize="9" Text="{Binding DownloadFileText}"/>
             </StackPanel>
         </Grid>
     </Grid>
